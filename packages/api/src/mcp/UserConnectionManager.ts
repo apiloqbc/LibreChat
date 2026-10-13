@@ -31,7 +31,11 @@ import {
   requiresScheduledMCPBearerConnection,
   isScheduledMCPBearer,
 } from '~/schedules/bearer';
-import { MCPAuthenticationRejectedError, createScheduledMCPTransportError } from '~/mcp/errors';
+import {
+  MCPAuthenticationRejectedError,
+  createScheduledMCPTransportError,
+  isOAuthAuthenticationError,
+} from '~/mcp/errors';
 import { resolveDirectOpenIDBearerConfig, usesDirectOpenIDBearerRecovery } from '~/mcp/openid';
 import { MCPServersRegistry } from '~/mcp/registry/MCPServersRegistry';
 import { ConnectionsRepository } from '~/mcp/ConnectionsRepository';
@@ -1160,7 +1164,13 @@ export abstract class UserConnectionManager {
       signal?.throwIfAborted();
       return connection;
     } catch (error) {
-      logger.error(`[MCP][User: ${userId}] Failed to establish connection`);
+      if (isOAuthAuthenticationError(error)) {
+        logger.warn(
+          `[MCP][User: ${userId}] Failed to establish connection: authentication required`,
+        );
+      } else {
+        logger.error(`[MCP][User: ${userId}] Failed to establish connection`);
+      }
       // Ensure partial connection state is cleaned up if initialization fails
       connection?.removeAllListeners?.('toolsChanged');
       await connection?.dispose().catch(() => {

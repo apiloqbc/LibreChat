@@ -11,6 +11,7 @@ import {
   canUseAppConnection,
   canBackfillSharedServerInstructions,
   isInvalidClientMessage,
+  isReauthenticationRequiredMessage,
   isClientRejectionMessage,
   getMissingCustomUserVars,
   hasCustomUserVars,
@@ -629,6 +630,28 @@ describe('redactAllServerSecrets', () => {
     const canEditByServer = new Map<string, boolean>([['config-server', true]]);
     const redacted = redactAllServerSecrets(configs, { canEditByServer });
     expect(redacted['config-server'].url).toBe('https://infra.internal/mcp');
+  });
+});
+
+describe('isReauthenticationRequiredMessage', () => {
+  it('matches the grants an authorization server no longer honours', () => {
+    expect(
+      isReauthenticationRequiredMessage(
+        'Token refresh failed: 400 Bad Request - {"error":"invalid_grant","error_description":"Token is not active"}',
+      ),
+    ).toBe(true);
+    expect(isReauthenticationRequiredMessage('unauthorized_client: refresh not allowed')).toBe(
+      true,
+    );
+    expect(isReauthenticationRequiredMessage('INVALID_GRANT')).toBe(true);
+  });
+
+  it('does not match other refresh failures', () => {
+    expect(
+      isReauthenticationRequiredMessage('Token refresh failed: 500 Internal Server Error'),
+    ).toBe(false);
+    expect(isReauthenticationRequiredMessage('invalid_client')).toBe(false);
+    expect(isReauthenticationRequiredMessage('')).toBe(false);
   });
 });
 

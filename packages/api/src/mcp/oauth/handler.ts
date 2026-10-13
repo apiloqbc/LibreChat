@@ -36,7 +36,7 @@ import { isSSRFTarget, resolveHostnameSSRF, isOAuthUrlAllowed } from '~/auth';
 import { MCPTokenStorage, MCPTokenRefreshUnavailableError } from './tokens';
 import { probeResourceMetadataHint } from './resourceHint';
 import { createHardenedOAuthFetch } from './hardenedFetch';
-import { sanitizeUrlForLogging } from '~/mcp/utils';
+import { sanitizeUrlForLogging, isReauthenticationRequiredMessage } from '~/mcp/utils';
 import { getOAuthCallbackUrl } from '~/oauth/url';
 import { getOAuthUrlPort } from './url';
 
@@ -2218,7 +2218,12 @@ export class MCPOAuthHandler {
       const tokens = await response.json();
       return this.processRefreshResponse(tokens, metadata.serverName, 'auto-discovered OAuth');
     } catch (error) {
-      logger.error(`[MCPOAuth] Failed to refresh tokens for ${metadata.serverName}`, error);
+      const message = error instanceof Error ? error.message : String(error);
+      if (isReauthenticationRequiredMessage(message)) {
+        logger.warn(`[MCPOAuth] Failed to refresh tokens for ${metadata.serverName}`, error);
+      } else {
+        logger.error(`[MCPOAuth] Failed to refresh tokens for ${metadata.serverName}`, error);
+      }
       throw error;
     }
   }

@@ -2369,11 +2369,7 @@ export class MCPConnection extends EventEmitter {
         }
 
         // Check if it's an OAuth authentication error
-        if (
-          this.directBearerRecoveryEnabled
-            ? isMCPTransportAuthenticationError(error)
-            : isOAuthAuthenticationError(error)
-        ) {
+        if (this.isAuthenticationRequiredError(error)) {
           logger.warn(`${this.getLogPrefix()} OAuth authentication required`);
           this.oauthRequired = true;
           const serverUrl = this.url;
@@ -2445,7 +2441,7 @@ export class MCPConnection extends EventEmitter {
           } catch {
             // OAuth failed or timed out
             this.oauthRequired = false;
-            logger.error(`${this.getLogPrefix()} OAuth handling failed`);
+            logger.warn(`${this.getLogPrefix()} OAuth handling failed`);
             // Re-throw the original authentication error
             throw error;
           }
@@ -2568,7 +2564,11 @@ export class MCPConnection extends EventEmitter {
         throw new Error('Connection not established');
       }
     } catch (error) {
-      logger.error(`${this.getLogPrefix()} Connection failed`);
+      if (this.isAuthenticationRequiredError(error)) {
+        logger.warn(`${this.getLogPrefix()} Connection failed: authentication required`);
+      } else {
+        logger.error(`${this.getLogPrefix()} Connection failed`);
+      }
       throw error;
     }
   }
@@ -2666,11 +2666,7 @@ export class MCPConnection extends EventEmitter {
       }
 
       // Check if it's an OAuth authentication error
-      if (
-        this.directBearerRecoveryEnabled
-          ? isMCPTransportAuthenticationError(error)
-          : isOAuthAuthenticationError(error)
-      ) {
+      if (this.isAuthenticationRequiredError(error)) {
         logger.warn(`${this.getLogPrefix()} OAuth authentication error detected`);
         this.lastConnectionCheckError = error;
         this.lastConnectionCheckCredentialSetId = transportCredentialSetId;
@@ -3258,6 +3254,13 @@ export class MCPConnection extends EventEmitter {
 
   public isOAuthAuthenticationError(error: unknown): boolean {
     return isOAuthAuthenticationError(error);
+  }
+
+  /** A failure the user resolves by (re)authorizing the server: expected, so never logged as an error. */
+  private isAuthenticationRequiredError(error: unknown): boolean {
+    return this.directBearerRecoveryEnabled
+      ? isMCPTransportAuthenticationError(error)
+      : isOAuthAuthenticationError(error);
   }
 
   public getLastConnectionCheckCredentialSetId(): string | null | undefined {

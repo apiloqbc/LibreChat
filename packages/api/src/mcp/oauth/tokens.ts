@@ -11,7 +11,7 @@ import type {
 import type { OAuthTokens, OAuthClientInformation } from '@modelcontextprotocol/sdk/shared/auth.js';
 import type { MCPOAuthTokens, ExtendedOAuthTokens, OAuthStoredClientMetadata } from './types';
 import type { FlowLease, FlowStateManager } from '~/flow/manager';
-import { isInvalidClientMessage } from '~/mcp/utils';
+import { isInvalidClientMessage, isReauthenticationRequiredMessage } from '~/mcp/utils';
 import { isSystemUserId } from '~/mcp/enum';
 
 export class ReauthenticationRequiredError extends Error {
@@ -1836,7 +1836,19 @@ export class MCPTokenStorage {
       logger.info(`${logPrefix} Successfully refreshed and stored OAuth tokens`);
       return storedTokens;
     } catch (refreshError) {
-      logger.error(`${logPrefix} Failed to refresh tokens`, refreshError);
+      const errorMessage =
+        refreshError instanceof Error ? refreshError.message : String(refreshError);
+      const normalizedErrorMessage = errorMessage.toLowerCase();
+      /** A grant the server no longer honours ends the OAuth session the way it is meant to end:
+       *  the user re-authorizes. Only an unexpected failure is an error. */
+      const reauthenticationExpected =
+        refreshError instanceof ReauthenticationRequiredError ||
+        isReauthenticationRequiredMessage(errorMessage);
+      if (reauthenticationExpected) {
+        logger.warn(`${logPrefix} Failed to refresh tokens`, refreshError);
+      } else {
+        logger.error(`${logPrefix} Failed to refresh tokens`, refreshError);
+      }
       if (
         refreshError instanceof ReauthenticationRequiredError ||
         refreshError instanceof MCPTokenRefreshUnavailableError
@@ -1850,9 +1862,6 @@ export class MCPTokenStorage {
         return null;
       }
       // Check if it's an unauthorized_client error (refresh not supported)
-      const errorMessage =
-        refreshError instanceof Error ? refreshError.message : String(refreshError);
-      const normalizedErrorMessage = errorMessage.toLowerCase();
       if (normalizedErrorMessage.includes('unauthorized_client')) {
         logger.info(
           `${logPrefix} Server does not support refresh tokens for this client. New authentication required.`,

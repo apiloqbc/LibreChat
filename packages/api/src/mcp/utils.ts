@@ -831,6 +831,15 @@ export function isClientRejectionMessage(message: string): boolean {
 }
 
 /**
+ * Checks whether a message indicates the authorization server no longer honours the grant
+ * (`invalid_grant`, `unauthorized_client`). The user re-authorizes; nothing is broken.
+ */
+export function isReauthenticationRequiredMessage(message: string): boolean {
+  const msg = message.toLowerCase();
+  return msg.includes('invalid_grant') || msg.includes('unauthorized_client');
+}
+
+/**
  * Sanitizes a URL by removing query parameters to prevent credential leakage in logs.
  * @param url - The URL to sanitize (string or URL object)
  * @returns The sanitized URL string without query parameters
